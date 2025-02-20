@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>瞄准射击游戏</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            touch-action: none;
+            background: #333;
+        }
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        .target {
+            width: 40px;
+            height: 40px;
+            background: red;
+            border-radius: 50%;
+            position: absolute;
+            transition: opacity 0.3s;
+        }
+        #crosshair {
+            width: 20px;
+            height: 20px;
+            position: absolute;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: #00ff00;
+        }
+        #crosshair::before {
+            width: 20px;
+            height: 2px;
+            top: 9px;
+            left: 0;
+        }
+        #crosshair::after {
+            width: 2px;
+            height: 20px;
+            left: 9px;
+            top: 0;
+        }
+        #score {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 24px;
+            font-family: Arial;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score">分数: 0</div>
+        <div id="crosshair"></div>
+    </div>
+
+    <script>
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        let aimX = window.innerWidth / 2;
+        let aimY = window.innerHeight / 2;
+        let score = 0;
+        let velocityX = 0;
+        let velocityY = 0;
+        const sensitivity = 0.3; // 手机灵敏度调节
+        const decay = 0.9;      // 速度衰减系数
+
+        // 初始化瞄准镜
+        const crosshair = document.getElementById('crosshair');
+        const scoreElement = document.getElementById('score');
+        
+        // 初始化设备控制
+        if (isMobile) {
+            setupGyroControls();
+        } else {
+            setupMouseControls();
+        }
+
+        // 设置鼠标控制
+        function setupMouseControls() {
+            document.addEventListener('mousemove', (e) => {
+                aimX = e.clientX;
+                aimY = e.clientY;
+                updateCrosshair();
+            });
+        }
+
+        // 设置陀螺仪控制
+        function setupGyroControls() {
+            if (typeof DeviceOrientationEvent !== 'undefined' &&
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOS需要权限请求
+                DeviceOrientationEvent.requestPermission()
+                    .then(permission => {
+                        if (permission === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        }
+                    });
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+        }
+
+        function handleOrientation(e) {
+            // 调整参数以匹配不同设备
+            let x = e.gamma * 1.5;  // 左右倾斜
+            let y = e.beta * 0.8;   // 前后倾斜
+            
+            // 更新速度（带阻尼效果）
+            velocityX = x * sensitivity * 0.6 + velocityX * 0.4;
+            velocityY = y * sensitivity * 0.6 + velocityY * 0.4;
+
+            requestAnimationFrame(updateGyroAim);
+        }
+
+        function updateGyroAim() {
+            velocityX *= decay;
+            velocityY *= decay;
+            
+            aimX += velocityX;
+            aimY += velocityY;
+
+            // 边界限制
+            aimX = Math.max(0, Math.min(window.innerWidth, aimX));
+            aimY = Math.max(0, Math.min(window.innerHeight, aimY));
+
+            updateCrosshair();
+        }
+
+        function updateCrosshair() {
+            crosshair.style.left = aimX + 'px';
+            crosshair.style.top = aimY + 'px';
+        }
+
+        // 射击事件处理
+        document.addEventListener(isMobile ? 'touchstart' : 'click', shoot);
+
+        function shoot() {
+            // 找到所有可能击中的目标
+            const targets = document.querySelectorAll('.target');
+            targets.forEach(target => {
+                const rect = target.getBoundingClientRect();
+                const centerX = rect.left + rect.width/2;
+                const centerY = rect.top + rect.height/2;
+                const distance = Math.hypot(centerX - aimX, centerY - aimY);
+                
+                if (distance < 20) { // 命中范围
+                    target.style.opacity = 0;
+                    setTimeout(() => target.remove(), 300);
+                    score += 100;
+                    scoreElement.textContent = `分数: ${score}`;
+                    createTarget();
+                }
+            });
+        }
+
+        // 生成目标
+        function createTarget() {
+            const target = document.createElement('div');
+            target.className = 'target';
+            target.style.left = Math.random() * (window.innerWidth - 40) + 'px';
+            target.style.top = Math.random() * (window.innerHeight - 40) + 'px';
+            document.getElementById('gameContainer').appendChild(target);
+        }
+
+        // 游戏初始化
+        for (let i = 0; i < 5; i++) {
+            createTarget();
+        }
+
+        // 窗口大小调整处理
+        window.addEventListener('resize', () => {
+            aimX = Math.min(aimX, window.innerWidth);
+            aimY = Math.min(aimY, window.innerHeight);
+            updateCrosshair();
+        });
+    </script>
+</body>
+</html>
